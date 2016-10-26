@@ -27,6 +27,7 @@ library(ggplot2)
 library(ggrepel)
 ```
 
+## load data
 ```{r loaddata}
 setwd("E:/Groningen/Data/RNAseq_clinic/5GPM/GRCh38/");
 GPMnames <- fread("counts_GENES_ScaffoldGenesRemoved_DiscardedRemoved.DESeqNorm.Log2_RNAids.txt")
@@ -52,7 +53,8 @@ for(i in c(1:100))
 }
 ```
 
-```{r plotAll}
+## plot data all samples
+```{r qPlotAll}
 qplot(pcInfo[,1], pcInfo[,2], colour = pcInfo[,"Cell.type"], xlab="PC1", ylab="PC2",label = rownames(pcInfo))
 qplot(pcInfo[,1], pcInfo[,2],data=pcInfo, colour = pcInfo[,"Cell.type"], xlab="PC1", ylab="PC2",label = rownames(pcInfo)) + geom_text(colour = "black")
 qplot(pcInfo[,1], pcInfo[,2],data=pcInfo, colour = pcInfo[,"Cell.type"], xlab="PC1", ylab="PC2",label = pcInfo[,"Causal.gene"]) + geom_text(colour = "black")
@@ -65,7 +67,8 @@ p<- ggplot(pcInfo, aes(x=pcInfo[,1],y=pcInfo[,2], label=pcInfo[,"Causal.gene"], 
 p + geom_point() + geom_label_repel()
 ```
 
-```{r Plot5gpm}
+##Get 5gpm only
+```{r 5gpmOnly}
 gpmIDs=as.character(rownames(pcInfo)[which(grepl("5GPM",pcInfo[,"Study.group"]))])
 
 gpmOnly<-GPM[,gpmIDs]
@@ -103,6 +106,7 @@ p + geom_point() + geom_text_repel(aes(label=rownames(gpmOnlyPCs)),size = 2)
 #geom_label_repel
 ```
 
+## Plot 5gpm and splice samples
 ```{r gpmAndSplice, echo=FALSE}
 gpmIDs=as.character(rownames(pcInfo)[c(which(grepl("5GPM",pcInfo[,"Study.group"])), which(grepl("Splice",pcInfo[,"Study.group"])))])
 
@@ -131,24 +135,6 @@ p + geom_point() + geom_text_repel(aes(label=rownames(gpmOnlyPCs)),size = 2)
 
 p + geom_point() + geom_label_repel(aes(label=gpmOnlyPCs["Causal.gene"]),size = 2)
 
-```
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r useless, echo=FALSE}
-colors = matrix( 
-   c("Fibroblasts","Whole blood", "Arterial Whole blood", "B-cell", "Familial Hypercholesterolemia", "purple","red", "yellow", "green","blue"), 
-   nrow=5, 
-   ncol=2)
-colindex=match(pcInfo[,"Cell.type"],colors[,1])
-pcInfo <- cbind(pcInfo,color=colors[colindex,2])
-
-B = matrix( 
-   c(2, 1, 3, 3, "Red", "Green", "Blue","Yellow"), 
-   nrow=4, 
-   ncol=2) 
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
