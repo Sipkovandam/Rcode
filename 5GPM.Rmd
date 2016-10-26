@@ -1,0 +1,140 @@
+---
+title: "5GPM"
+author: "Sipko"
+date: "October 18, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r load}
+library(scales)
+library(stringr)
+library(data.table)
+#install.packages('devtools')
+library(devtools)
+install_github("vqv/ggbiplot")
+library(ggbiplot)
+library(ggplot2)
+#devtools::install_github("RcppCore/Rcpp",dep=TRUE)
+#devtools::install_github("slowkow/ggrepel",dep=TRUE)
+library(ggrepel)
+
+
+setwd("E:/Groningen/Data/RNAseq_clinic/5GPM/GRCh38/");
+GPMnames <- fread("counts_GENES_ScaffoldGenesRemovedcounts_DiscardedRemoved.DESeqNorm.Log2_RNAids.txt")
+GPM <- data.frame(fread("counts_GENES_ScaffoldGenesRemovedcounts_DiscardedRemoved.DESeqNorm.Log2_RNAids.txt"), row.names=1);
+meta <- read.table("E:/Groningen/Data/RNAseq_clinic/RNAseq_Info.txt", sep="\t", header=TRUE)
+rownames(meta)=make.names(meta[,"externalSampleID"], unique=TRUE)
+gpm_eigen=prcomp(GPM, center=TRUE,Scale=TRUE)
+summary(gpm_eigen)
+plot(gpm_eigen, type="l")
+
+pcInfo <- cbind(gpm_eigen$rotation,sampleIDs=noquote(colnames(GPMnames)[-1]))
+#colnames(pcInfo)[length(pcInfo[1,])]="sampleIDs"
+pcInfo[,"sampleIDs"]=noquote(pcInfo[,"sampleIDs"])
+colindex=match(pcInfo[,"sampleIDs"],meta[,"externalSampleID"])
+pcInfo <- cbind.data.frame(pcInfo,Cell.type=meta[colindex,"Cell.type"])
+pcInfo <- cbind.data.frame(pcInfo,Study.group=meta[colindex,"Study.group"])
+pcInfo <- cbind.data.frame(pcInfo,Causal.gene=meta[colindex,"Causal.gene"])
+
+for(i in c(1:100))
+{
+  pcInfo[,i]=as.numeric(as.character((pcInfo[,i])))
+}
+
+qplot(pcInfo[,1], pcInfo[,2], colour = pcInfo[,"Cell.type"], xlab="PC1", ylab="PC2",label = rownames(pcInfo))
+qplot(pcInfo[,1], pcInfo[,2],data=pcInfo, colour = pcInfo[,"Cell.type"], xlab="PC1", ylab="PC2",label = rownames(pcInfo)) + geom_text(colour = "black")
+qplot(pcInfo[,1], pcInfo[,2],data=pcInfo, colour = pcInfo[,"Cell.type"], xlab="PC1", ylab="PC2",label = pcInfo[,"Causal.gene"]) + geom_text(colour = "black")
+
+p<- ggplot(pcInfo, aes(x=pcInfo[,1],y=pcInfo[,2], label=pcInfo[,"Causal.gene"], color=pcInfo[,"Cell.type"]))
+p + geom_point() + geom_label_repel()
+p<- ggplot(pcInfo, aes(x=pcInfo[,1],y=pcInfo[,2], label=pcInfo[,"Causal.gene"], color=pcInfo[,"Study.group"]))
+p + geom_point() + geom_label_repel()
+
+gpmIDs=as.character(rownames(pcInfo)[which(grepl("5GPM",pcInfo[,"Study.group"]))])
+
+gpmOnly<-GPM[,gpmIDs]
+gpmOnlyPCs<-prcomp(gpmOnly, center=TRUE,Scale=TRUE)
+gpmOnlyPCs<-gpmOnlyPCs$rotation
+colindexGPMonly=match(rownames(gpmOnlyPCs),rownames(meta))
+gpmOnlyPCs <-cbind.data.frame(gpmOnlyPCs,Cell.type=meta[colindexGPMonly,"Cell.type"])
+gpmOnlyPCs <-cbind.data.frame(gpmOnlyPCs,Study.group=meta[colindexGPMonly,"Study.group"])
+gpmOnlyPCs <-cbind.data.frame(gpmOnlyPCs,Causal.gene=meta[colindexGPMonly,"Causal.gene"])
+
+for(i in c(1:50))
+{
+  gpmOnlyPCs[,i]=as.numeric(as.character((gpmOnlyPCs[,i])))
+}
+qplot(gpmOnlyPCs[,1], gpmOnlyPCs[,2], colour = gpmOnlyPCs[,"Cell.type"], xlab="PC1", ylab="PC2",label = rownames(gpmOnlyPCs))
+qplot(gpmOnlyPCs[,1],gpmOnlyPCs[,2], xlab="PC1", ylab="PC2", label = rownames(gpmOnlyPCs), colour = gpmOnlyPCs[,"Cell.type"])+ geom_text(colour = "black")
+qplot(gpmOnlyPCs[,1],gpmOnlyPCs[,2], xlab="PC1", ylab="PC2", label = gpmOnlyPCs[,"Causal.gene"], colour = gpmOnlyPCs[,"Cell.type"])+ geom_text(colour = "black")
+
+p <- ggplot(gpmOnlyPCs, aes(x=gpmOnlyPCs[,1], y=gpmOnlyPCs[,2], label=rownames(gpmOnlyPCs),color = factor(gpmOnlyPCs[,"Cell.type"])))
+#p <- ggplot(pcInfo, aes(x="pcInfo[,1]", y="pcInfo[,2]", label=rownames(pcInfo)))
+p + geom_point()
+#geom_text_repel(data=filter(results, padj<0.05), aes(label=Gene))
+p + geom_point() + geom_label_repel(aes(label=rownames(gpmOnlyPCs)),size = 2)
+p + geom_point() + geom_text_repel(aes(label=rownames(gpmOnlyPCs)),size = 2)
+
+#+theme_classic(base_size = 16)
+#geom_label_repel
+```
+
+```{r gpmAndSplice, echo=FALSE}
+gpmIDs=as.character(rownames(pcInfo)[c(which(grepl("5GPM",pcInfo[,"Study.group"])), which(grepl("Splice",pcInfo[,"Study.group"])))])
+
+gpmOnly<-GPM[,gpmIDs]
+gpmOnlyPCs<-prcomp(gpmOnly, center=TRUE,Scale=TRUE)
+gpmOnlyPCs<-gpmOnlyPCs$rotation
+colindexGPMonly=match(rownames(gpmOnlyPCs),rownames(meta))
+gpmOnlyPCs <-cbind.data.frame(gpmOnlyPCs,Cell.type=meta[colindexGPMonly,"Cell.type"])
+gpmOnlyPCs <-cbind.data.frame(gpmOnlyPCs,Study.group=meta[colindexGPMonly,"Study.group"])
+gpmOnlyPCs <-cbind.data.frame(gpmOnlyPCs,Causal.gene=meta[colindexGPMonly,"Causal.gene"])
+
+for(i in c(1:60))
+{
+  gpmOnlyPCs[,i]=as.numeric(as.character((gpmOnlyPCs[,i])))
+}
+qplot(gpmOnlyPCs[,1], gpmOnlyPCs[,2], colour = gpmOnlyPCs[,"Cell.type"], xlab="PC1", ylab="PC2",label = rownames(gpmOnlyPCs))
+qplot(gpmOnlyPCs[,1],gpmOnlyPCs[,2], xlab="PC1", ylab="PC2", label = rownames(gpmOnlyPCs), colour = gpmOnlyPCs[,"Cell.type"])+ geom_text(colour = "black")
+qplot(gpmOnlyPCs[,1],gpmOnlyPCs[,2], xlab="PC1", ylab="PC2", label = gpmOnlyPCs[,"Causal.gene"], colour = gpmOnlyPCs[,"Cell.type"])+ geom_text(colour = "black")
+
+p <- ggplot(gpmOnlyPCs, aes(x=gpmOnlyPCs[,1], y=gpmOnlyPCs[,2], label=rownames(gpmOnlyPCs),color = factor(gpmOnlyPCs[,"Cell.type"])))
+#p <- ggplot(pcInfo, aes(x="pcInfo[,1]", y="pcInfo[,2]", label=rownames(pcInfo)))
+p + geom_point()
+#geom_text_repel(data=filter(results, padj<0.05), aes(label=Gene))
+p + geom_point() + geom_label_repel(aes(label=rownames(gpmOnlyPCs)),size = 2)
+p + geom_point() + geom_text_repel(aes(label=rownames(gpmOnlyPCs)),size = 2)
+
+p + geom_point() + geom_label_repel(aes(label=gpmOnlyPCs["Causal.gene"]),size = 2)
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r useless, echo=FALSE}
+colors = matrix( 
+   c("Fibroblasts","Whole blood", "Arterial Whole blood", "B-cell", "Familial Hypercholesterolemia", "purple","red", "yellow", "green","blue"), 
+   nrow=5, 
+   ncol=2)
+colindex=match(pcInfo[,"Cell.type"],colors[,1])
+pcInfo <- cbind(pcInfo,color=colors[colindex,2])
+
+B = matrix( 
+   c(2, 1, 3, 3, "Red", "Green", "Blue","Yellow"), 
+   nrow=4, 
+   ncol=2) 
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
