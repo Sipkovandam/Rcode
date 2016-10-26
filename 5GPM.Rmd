@@ -9,11 +9,9 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+## Info
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+One sample is grey, as it is not in the sample sheet, but it is a sample in the matrix file.The two NOTCH1 outlier samples originate from 1 sample and are sequenced in duplicate. Both of which have 69% reads mapping (although not exact same number).
 
 ```{r load}
 library(scales)
@@ -27,11 +25,12 @@ library(ggplot2)
 #devtools::install_github("RcppCore/Rcpp",dep=TRUE)
 #devtools::install_github("slowkow/ggrepel",dep=TRUE)
 library(ggrepel)
+```
 
-
+```{r loaddata}
 setwd("E:/Groningen/Data/RNAseq_clinic/5GPM/GRCh38/");
-GPMnames <- fread("counts_GENES_ScaffoldGenesRemovedcounts_DiscardedRemoved.DESeqNorm.Log2_RNAids.txt")
-GPM <- data.frame(fread("counts_GENES_ScaffoldGenesRemovedcounts_DiscardedRemoved.DESeqNorm.Log2_RNAids.txt"), row.names=1);
+GPMnames <- fread("counts_GENES_ScaffoldGenesRemoved_DiscardedRemoved.DESeqNorm.Log2_RNAids.txt")
+GPM <- data.frame(fread("counts_GENES_ScaffoldGenesRemoved_DiscardedRemoved.DESeqNorm.Log2_RNAids.txt"), row.names=1);
 meta <- read.table("E:/Groningen/Data/RNAseq_clinic/RNAseq_Info.txt", sep="\t", header=TRUE)
 rownames(meta)=make.names(meta[,"externalSampleID"], unique=TRUE)
 gpm_eigen=prcomp(GPM, center=TRUE,Scale=TRUE)
@@ -46,38 +45,53 @@ pcInfo <- cbind.data.frame(pcInfo,Cell.type=meta[colindex,"Cell.type"])
 pcInfo <- cbind.data.frame(pcInfo,Study.group=meta[colindex,"Study.group"])
 pcInfo <- cbind.data.frame(pcInfo,Causal.gene=meta[colindex,"Causal.gene"])
 
+#not sure if this is needed but for some reason values are not considered numeric otherwise
 for(i in c(1:100))
 {
   pcInfo[,i]=as.numeric(as.character((pcInfo[,i])))
 }
+```
 
+```{r plotAll}
 qplot(pcInfo[,1], pcInfo[,2], colour = pcInfo[,"Cell.type"], xlab="PC1", ylab="PC2",label = rownames(pcInfo))
 qplot(pcInfo[,1], pcInfo[,2],data=pcInfo, colour = pcInfo[,"Cell.type"], xlab="PC1", ylab="PC2",label = rownames(pcInfo)) + geom_text(colour = "black")
 qplot(pcInfo[,1], pcInfo[,2],data=pcInfo, colour = pcInfo[,"Cell.type"], xlab="PC1", ylab="PC2",label = pcInfo[,"Causal.gene"]) + geom_text(colour = "black")
 
+#plot the cell types
 p<- ggplot(pcInfo, aes(x=pcInfo[,1],y=pcInfo[,2], label=pcInfo[,"Causal.gene"], color=pcInfo[,"Cell.type"]))
 p + geom_point() + geom_label_repel()
+#Plot the study groups
 p<- ggplot(pcInfo, aes(x=pcInfo[,1],y=pcInfo[,2], label=pcInfo[,"Causal.gene"], color=pcInfo[,"Study.group"]))
 p + geom_point() + geom_label_repel()
+```
 
+```{r Plot5gpm}
 gpmIDs=as.character(rownames(pcInfo)[which(grepl("5GPM",pcInfo[,"Study.group"]))])
 
 gpmOnly<-GPM[,gpmIDs]
 gpmOnlyPCs<-prcomp(gpmOnly, center=TRUE,Scale=TRUE)
 gpmOnlyPCs<-gpmOnlyPCs$rotation
 colindexGPMonly=match(rownames(gpmOnlyPCs),rownames(meta))
+
+#add celltype
 gpmOnlyPCs <-cbind.data.frame(gpmOnlyPCs,Cell.type=meta[colindexGPMonly,"Cell.type"])
+#add study group
 gpmOnlyPCs <-cbind.data.frame(gpmOnlyPCs,Study.group=meta[colindexGPMonly,"Study.group"])
+#add causal genes
 gpmOnlyPCs <-cbind.data.frame(gpmOnlyPCs,Causal.gene=meta[colindexGPMonly,"Causal.gene"])
 
+#not sure if this is needed but for some reason values are not considered numeric otherwise
 for(i in c(1:50))
 {
   gpmOnlyPCs[,i]=as.numeric(as.character((gpmOnlyPCs[,i])))
 }
+
+##Qplot
 qplot(gpmOnlyPCs[,1], gpmOnlyPCs[,2], colour = gpmOnlyPCs[,"Cell.type"], xlab="PC1", ylab="PC2",label = rownames(gpmOnlyPCs))
 qplot(gpmOnlyPCs[,1],gpmOnlyPCs[,2], xlab="PC1", ylab="PC2", label = rownames(gpmOnlyPCs), colour = gpmOnlyPCs[,"Cell.type"])+ geom_text(colour = "black")
 qplot(gpmOnlyPCs[,1],gpmOnlyPCs[,2], xlab="PC1", ylab="PC2", label = gpmOnlyPCs[,"Causal.gene"], colour = gpmOnlyPCs[,"Cell.type"])+ geom_text(colour = "black")
 
+##ggplot
 p <- ggplot(gpmOnlyPCs, aes(x=gpmOnlyPCs[,1], y=gpmOnlyPCs[,2], label=rownames(gpmOnlyPCs),color = factor(gpmOnlyPCs[,"Cell.type"])))
 #p <- ggplot(pcInfo, aes(x="pcInfo[,1]", y="pcInfo[,2]", label=rownames(pcInfo)))
 p + geom_point()
