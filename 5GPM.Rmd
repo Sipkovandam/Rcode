@@ -13,44 +13,96 @@ knitr::opts_chunk$set(echo = TRUE)
 
 One sample is grey, as it is not in the sample sheet, but it is a sample in the matrix file.The two NOTCH1 outlier samples originate from 1 sample and are sequenced in duplicate. Both of which have 69% reads mapping (although not exact same number).
 
-```{r load}
+## Load libraries
+```{r libraries}
 library(scales)
+library(plyr)
 library(stringr)
 library(data.table)
-#install.packages('devtools')
+#install.packages('devtools') #uncomment if libraries are missing
 library(devtools)
-install_github("vqv/ggbiplot")
-library(ggbiplot)
 library(ggplot2)
-#devtools::install_github("RcppCore/Rcpp",dep=TRUE)
-#devtools::install_github("slowkow/ggrepel",dep=TRUE)
+#devtools::install_github("RcppCore/Rcpp",dep=TRUE) #uncomment if libraries are missing
+#devtools::install_github("slowkow/ggrepel",dep=TRUE) #uncomment if libraries are missing
 library(ggrepel)
 ```
+
+## Functions
+```{r}
+PCAmetadata <- function(GPM, GPMnames)
+{
+  gpm_eigen=prcomp(GPM, center=TRUE,Scale=TRUE)
+  summary(gpm_eigen)
+  plot(gpm_eigen, type="l")
+  pcInfo <- cbind(gpm_eigen$rotation,sampleIDs=noquote(GPMnames))
+  #colnames(pcInfo)[length(pcInfo[1,])]="sampleIDs"
+  pcInfo[,"sampleIDs"]=noquote(pcInfo[,"sampleIDs"])
+  colindex=match(pcInfo[,"sampleIDs"],meta[,"externalSampleID"])
+  pcInfo <- cbind.data.frame(pcInfo,Cell.type=meta[colindex,"Cell.type"])
+  pcInfo <- cbind.data.frame(pcInfo,Study.group=meta[colindex,"Study.group"])
+  pcInfo <- cbind.data.frame(pcInfo,Causal.gene=meta[colindex,"Causal.gene"])
+  pcInfo <- cbind.data.frame(pcInfo,Familie.nummer=meta[colindex,"Familie.nummer"])
+  
+  #not sure if this is needed but for some reason values are not considered numeric otherwise
+  for(i in c(1:100))
+  {
+    pcInfo[,i]=as.numeric(as.character((pcInfo[,i])))
+  }
+  return(pcInfo)
+}
+getGenes <- function(GPM,GPMnames,addMeta=TRUE)
+{
+  genes=c("ENSG00000012048","ENSG00000139618","ENSG00000145191","ENSG00000127554","ENSG00000170266","ENSG00000198910","ENSG00000134571","ENSG00000092054","ENSG00000148400","ENSG00000165917")
+
+  subsetGPM=GPM[genes,]
+  conversion=data.frame(fread("E:/Groningen/Data/Annotation/GRCh38/DiseaseGenes/EnsgToSymbol.txt"),row.names=1)
+  rownames(subsetGPM)=conversion[rownames(subsetGPM),1]
+  subsetGPMtrans=t(subsetGPM)
+  if(addMeta)
+  {
+    colindex=match(colnames(GPMnames)[-1],meta[,"externalSampleID"])
+  
+    subsetGPMtrans=cbind.data.frame(subsetGPMtrans,causal.gene=meta[colindex,"Causal.gene"])
+    subsetGPMtrans=cbind.data.frame(subsetGPMtrans,Cell.type=meta[colindex,"Cell.type"])
+  }
+  return(subsetGPMtrans)
+}
+```
+
 
 ## Load data
 ```{r loaddata}
 setwd("E:/Groningen/Data/RNAseq_clinic/5GPM/GRCh38/");
-GPMnames <- fread("counts_GENES_ScaffoldGenesRemoved_DiscardedRemoved.DESeqNorm.Log2_RNAids.txt")
-GPM <- data.frame(fread("counts_GENES_ScaffoldGenesRemoved_DiscardedRemoved.DESeqNorm.Log2_RNAids.txt"), row.names=1);
+GPMnames_N <- fread("counts_GENES_ScaffoldGenesRemoved_DiscardedRemoved.DESeqNorm.Log2_RNAids.txt")
+GPM_N <- data.frame(GPMnames_N, row.names=1);
 meta <- read.table("E:/Groningen/Data/RNAseq_clinic/RNAseq_Info.txt", sep="\t", header=TRUE)
 rownames(meta)=make.names(meta[,"externalSampleID"], unique=TRUE)
-gpm_eigen=prcomp(GPM, center=TRUE,Scale=TRUE)
-summary(gpm_eigen)
-plot(gpm_eigen, type="l")
+pcInfo=PCAmetadata(GPM_N, colnames(GPMnames_N)[-1])
 
-pcInfo <- cbind(gpm_eigen$rotation,sampleIDs=noquote(colnames(GPMnames)[-1]))
-#colnames(pcInfo)[length(pcInfo[1,])]="sampleIDs"
-pcInfo[,"sampleIDs"]=noquote(pcInfo[,"sampleIDs"])
-colindex=match(pcInfo[,"sampleIDs"],meta[,"externalSampleID"])
-pcInfo <- cbind.data.frame(pcInfo,Cell.type=meta[colindex,"Cell.type"])
-pcInfo <- cbind.data.frame(pcInfo,Study.group=meta[colindex,"Study.group"])
-pcInfo <- cbind.data.frame(pcInfo,Causal.gene=meta[colindex,"Causal.gene"])
+#BBMRI
+BBMRInames_N <- fread("E:/Groningen/Data/bbmri/GCRh38/DESeqNorm/counts_GENES_ScaffoldGenesRemoved.DESeqNorm.Log2.txt")
+BBMRI_N <- data.frame(BBMRInames_N, row.names=1);
+pcInfo=PCAmetadata(BBMRI_N, colnames(GPMnames_N)[-1])
 
-#not sure if this is needed but for some reason values are not considered numeric otherwise
-for(i in c(1:100))
-{
-  pcInfo[,i]=as.numeric(as.character((pcInfo[,i])))
-}
+subsetGPMtrans_N=getGenes(GPM_N, GPMnames_N)
+subsetBBMRItrans_N=getGenes(BBMRI_N,GPMnames_N,FALSE) 
+subsetBBMRItrans_N=data.frame(subsetBBMRItrans_N);
+
+p <- ggplot(subsetGPMtrans_N, aes(x=c(1:length(subsetGPMtrans_N[,1])),y=subsetGPMtrans_N[,"GFER"], label=subsetGPMtrans_N[,"causal.gene"],color=subsetGPMtrans_N[,"Cell.type"]))
+p + geom_point(size=1) + geom_label_repel(size=2)
+which(subsetGPMtrans_N[,"causal.gene"]=="L1CAM")
+rownames(subsetGPMtrans_N)[c(74,104)]
+#add info about causal gene for each sample
+#Select samples with known mutation
+colIndex=match(colnames(subsetGPMtrans_N),colnames(subsetBBMRItrans_N))
+merge_N=rbind.fill(subsetGPMtrans_N, subsetBBMRItrans_N[,])
+#NOTCH1, EIF2B5, GLB1, BRCA1,BRCA2,L1CAM,MYBPC3,RAPSN
+p <- ggplot(merge_N, aes(x=c(1:length(merge_N[,1])),y=merge_N[,"BRCA2"], label=merge_N[,"causal.gene"],color=merge_N[,"Cell.type"]))
+p + geom_point(size=1) + geom_label_repel(size=2)
+
+p <- ggplot(merge_N, aes(x=c(1:length(merge_N[,1])),y=merge_N[,"GLB1"], label=rownames(merge_N),color=merge_N[,"Cell.type"]))
+p + geom_point(size=1) + geom_text(size=2)
+
 ```
 
 ## Plot data all samples
@@ -60,8 +112,9 @@ qplot(pcInfo[,1], pcInfo[,2],data=pcInfo, colour = pcInfo[,"Cell.type"], xlab="P
 qplot(pcInfo[,1], pcInfo[,2],data=pcInfo, colour = pcInfo[,"Cell.type"], xlab="PC1", ylab="PC2",label = pcInfo[,"Causal.gene"]) + geom_text(colour = "black")
 
 #plot the cell types
-p<- ggplot(pcInfo, aes(x=pcInfo[,1],y=pcInfo[,2], label=pcInfo[,"Causal.gene"], color=pcInfo[,"Cell.type"]))
-p + geom_point() + geom_label_repel()
+Cell_Type=pcInfo[,"Cell.type"]
+p<- ggplot(pcInfo, aes(x=pcInfo[,1],y=pcInfo[,2], label=pcInfo[,"Causal.gene"], color=Cell_Type))
+p + geom_point() + geom_label_repel() + xlab("PC1") + ylab("PC2")
 #Plot the study groups
 p<- ggplot(pcInfo, aes(x=pcInfo[,1],y=pcInfo[,2], label=pcInfo[,"Causal.gene"], color=pcInfo[,"Study.group"]))
 p + geom_point() + geom_label_repel()
@@ -71,7 +124,7 @@ p + geom_point() + geom_label_repel()
 ```{r 5gpmOnly}
 gpmIDs=as.character(rownames(pcInfo)[which(grepl("5GPM",pcInfo[,"Study.group"]))])
 
-gpmOnly<-GPM[,gpmIDs]
+gpmOnly<-GPM_N[,gpmIDs]
 gpmOnlyPCs<-prcomp(gpmOnly, center=TRUE,Scale=TRUE)
 gpmOnlyPCs<-gpmOnlyPCs$rotation
 colindexGPMonly=match(rownames(gpmOnlyPCs),rownames(meta))
@@ -82,6 +135,8 @@ gpmOnlyPCs <-cbind.data.frame(gpmOnlyPCs,Cell.type=meta[colindexGPMonly,"Cell.ty
 gpmOnlyPCs <-cbind.data.frame(gpmOnlyPCs,Study.group=meta[colindexGPMonly,"Study.group"])
 #add causal genes
 gpmOnlyPCs <-cbind.data.frame(gpmOnlyPCs,Causal.gene=meta[colindexGPMonly,"Causal.gene"])
+#add family info 
+gpmOnlyPCs <-cbind.data.frame(gpmOnlyPCs,Causal.gene=meta[colindexGPMonly,"Familie.nummer"])
 
 #not sure if this is needed but for some reason values are not considered numeric otherwise
 for(i in c(1:50))
@@ -105,12 +160,22 @@ p + geom_point() + geom_text_repel(aes(label=rownames(gpmOnlyPCs)),size = 2)
 #+theme_classic(base_size = 16)
 #geom_label_repel
 ```
+## Plot 5gpm and splice samples expression per gene
+```{r}
+subsetGPMtrans=getGenes(GPM_N,GPMnames_N)
+
+p <- ggplot(subsetGPMtrans, aes(x=c(1:length(subsetGPMtrans[,1])),y=subsetGPMtrans[,"NOTCH1"], label=subsetGPMtrans[,"causal.gene"],color=subsetGPMtrans[,"Cell.type"]))
+p + geom_point() + geom_label_repel(size=2)
+
+```
+
+
 
 ## Plot 5gpm and splice samples
 ```{r gpmAndSplice, echo=FALSE}
 gpmIDs=as.character(rownames(pcInfo)[c(which(grepl("5GPM",pcInfo[,"Study.group"])), which(grepl("Splice",pcInfo[,"Study.group"])))])
 
-gpmOnly<-GPM[,gpmIDs]
+gpmOnly<-GPM_N[,gpmIDs]
 gpmOnlyPCs<-prcomp(gpmOnly, center=TRUE,Scale=TRUE)
 gpmOnlyPCs<-gpmOnlyPCs$rotation
 colindexGPMonly=match(rownames(gpmOnlyPCs),rownames(meta))
@@ -126,15 +191,196 @@ qplot(gpmOnlyPCs[,1], gpmOnlyPCs[,2], colour = gpmOnlyPCs[,"Cell.type"], xlab="P
 qplot(gpmOnlyPCs[,1],gpmOnlyPCs[,2], xlab="PC1", ylab="PC2", label = rownames(gpmOnlyPCs), colour = gpmOnlyPCs[,"Cell.type"])+ geom_text(colour = "black")
 qplot(gpmOnlyPCs[,1],gpmOnlyPCs[,2], xlab="PC1", ylab="PC2", label = gpmOnlyPCs[,"Causal.gene"], colour = gpmOnlyPCs[,"Cell.type"])+ geom_text(colour = "black")
 
-p <- ggplot(gpmOnlyPCs, aes(x=gpmOnlyPCs[,1], y=gpmOnlyPCs[,2], label=rownames(gpmOnlyPCs),color = factor(gpmOnlyPCs[,"Cell.type"])))
+Cell_type=factor(gpmOnlyPCs[,"Cell.type"])
+p <- ggplot(gpmOnlyPCs, aes(x=gpmOnlyPCs[,1], y=gpmOnlyPCs[,2], label=rownames(gpmOnlyPCs),color = Cell_type))
 #p <- ggplot(pcInfo, aes(x="pcInfo[,1]", y="pcInfo[,2]", label=rownames(pcInfo)))
 p + geom_point()
 #geom_text_repel(data=filter(results, padj<0.05), aes(label=Gene))
 p + geom_point() + geom_label_repel(aes(label=rownames(gpmOnlyPCs)),size = 2)
 p + geom_point() + geom_text_repel(aes(label=rownames(gpmOnlyPCs)),size = 2)
 
-p + geom_point() + geom_label_repel(aes(label=gpmOnlyPCs["Causal.gene"]),size = 2)
+p + geom_point() + geom_label_repel(aes(label=gpmOnlyPCs["Causal.gene"]),size = 2) + xlab("PC1") + ylab("PC2")
 
 ```
+
+##-----------------------------------------------------------------------------
+## Load PCA corrected data
+```{r corrected}
+setwd("E:/Groningen/Data/Juha/Genes31995/Healthy/PCA/counts_GENES_ScaffoldGenesRemoved_DiscardedRemoved_RNAids/");
+GPMnames <- fread("PC_1-1-230_.txt")
+GPM <- data.frame(GPMnames, row.names=1);
+meta <- read.table("E:/Groningen/Data/RNAseq_clinic/RNAseq_Info.txt", sep="\t", header=TRUE)
+rownames(meta)=make.names(meta[,"externalSampleID"], unique=TRUE)
+
+#BBMRI
+BBMRInames <- fread("E:/Groningen/Data/Juha/Genes31995/Healthy/PCA/BBMRI/PC_1-1-230_.txt")
+BBMRI <- data.frame(BBMRInames, row.names=1);
+pcInfo=PCAmetadata(GPM[,-(1:2)], colnames(GPMnames)[-(1:3)])
+
+```
+
+## Plot corrected data all samples PCA plot
+```{r PCAPlotAll}
+#plot the cell types
+Cell_Type=pcInfo[,"Cell.type"]
+p<- ggplot(pcInfo, aes(x=pcInfo[,1],y=pcInfo[,2], label=pcInfo[,"Causal.gene"], color=Cell_Type))
+p + geom_point() + geom_text_repel() + xlab("PC1") + ylab("PC2")
+#family numbers
+p<- ggplot(pcInfo, aes(x=pcInfo[,1],y=pcInfo[,2], label=pcInfo[,"Causal.gene"], color=pcInfo[,"Familie.nummer"]))
+p + geom_point() + geom_text_repel() + xlab("PC1") + ylab("PC2")
+#Plot the study groups
+p<- ggplot(pcInfo, aes(x=pcInfo[,1],y=pcInfo[,2], label=pcInfo[,"Causal.gene"], color=pcInfo[,"Study.group"]))
+p + geom_point() + geom_label_repel()
+
+#sample names
+p<- ggplot(pcInfo, aes(x=pcInfo[,3],y=pcInfo[,4], label=rownames(pcInfo), color=pcInfo[,"Study.group"]))
+p + geom_point() + geom_text_repel(size = 2)
+p + geom_point() + geom_label_repel(size = 2)
+
+```
+
+## Plot corrected data expression per gene
+```{r boxPlotsGenes}
+#PLOT BASED ON NORMAL EXPRESSION
+p <- ggplot(subsetGPMtrans_N, aes(x=c(1:length(subsetGPMtrans_N[,1])),y=subsetGPMtrans_N[,"MYH7"], label=subsetGPMtrans_N[,"causal.gene"],color=subsetGPMtrans_N[,"Cell.type"]))
+p + geom_point(size=1) + geom_label_repel(size=2)
+
+#get the genes from the matrixes
+subsetGPMtrans=getGenes(GPM,GPMnames) 
+p <- ggplot(subsetGPMtrans, aes(x=c(1:length(subsetGPMtrans[,1])),y=subsetGPMtrans[,"MYH7"], label=subsetGPMtrans[,"causal.gene"],color=subsetGPMtrans[,"Cell.type"]))
+p + geom_point() + geom_text_repel(size=2)
+
+p <- ggplot(subsetGPMtrans, aes(x=c(1:length(subsetGPMtrans[,1])),y=subsetGPMtrans[,"GFER"], label=rownames(subsetGPMtrans),color=subsetGPMtrans[,"Cell.type"]))
+p + geom_point() + geom_text_repel(size=2)
+
+#load bbmri data (samples on rows, genes on columns)
+subsetBBMRItrans=getGenes(BBMRI,FALSE) 
+subsetBBMRItrans=data.frame(subsetBBMRItrans);
+p <- ggplot(subsetBBMRItrans, aes(x=c(1:length(subsetBBMRItrans[,1])),y=subsetBBMRItrans[,"NOTCH1"]))
+p + geom_point()
+
+
+
+#Select samples with known mutation
+colIndex=match(colnames(subsetGPMtrans),colnames(subsetBBMRItrans))
+merge=rbind.fill(subsetGPMtrans, subsetBBMRItrans[,])
+##GFER, MYH7
+#NOTCH1, EIF2B5, GLB1, BRCA1,BRCA2,L1CAM,MYBPC3,RAPSN
+#BRCA2, NOTCH1, GLB1, L1CAM, BRCA1
+#EIF2B5
+p <- ggplot(merge, aes(x=c(1:length(merge[,1])),y=merge[,"EIF2B5"], label=merge[,"causal.gene"],color=merge[,"Cell.type"]))
+p + geom_point(size=1) + geom_text_repel(size=2)
+
+p <- ggplot(merge, aes(x=c(1:length(merge[,1])),y=merge[,"GLB1"], label=rownames(merge),color=merge[,"Cell.type"]))
+p + geom_point(size=1) + geom_text(size=2)
+
+
+#method 2, plot samples
+conversion=data.frame(fread("E:/Groningen/Data/Annotation/GRCh38/DiseaseGenes/EnsgToSymbol.txt"),row.names=1)
+index=match(rownames(GPM),rownames(conversion))
+GPM_extra=cbind.data.frame(GPM, Causal.gene=conversion[index,1])
+p <- ggplot(GPM_extra, aes(x=c(1:length(GPM_extra[,1])),y=GPM_extra[,"RNA_001011"], label=GPM_extra[,"Causal.gene"]))
+p + geom_point(size=1) + geom_text_repel(size=2)
+
+```
+## Z-scores NOT corrected
+```{r zscores}
+GPMnames_NotCor <- fread("PC_1-0__zScores.txt")
+GPM_NotCor <- data.frame(GPMnames_NotCor, row.names=1);
+meta <- read.table("E:/Groningen/Data/RNAseq_clinic/RNAseq_Info.txt", sep="\t", header=TRUE)
+rownames(meta)=make.names(meta[,"externalSampleID"], unique=TRUE)
+
+#NOTCH1: RNA_001011,RNA_001011.1,RNA_000979
+#GLB1: RNA.001128
+#L1CAM: RNA_000811,RNA_000947
+#EIF2B5: GPM_extra_Z["ENSG00000145191","RNA.001110"]
+#BRCA2:  GPM_extra_Z["ENSG00000139618","RNA_000751"]
+#BRCA1: GPM_extra_Z["ENSG00000012048","RNA_000939"]
+#MYBPC3: "RNA_00958", "RNA_00958.1"
+#RAPSN: "RNA.001126", "RNA.001126.1" 
+#GFER: RNA.001103
+#MYH7: c("RNA_001073","RNA_001073.1","RNA_001075","RNA_001075.1")
+
+index=match(rownames(GPM),rownames(conversion))
+GPM_extra_Z_NotCor=cbind.data.frame(GPM_NotCor, Causal.gene=conversion[index,1])
+p <- ggplot(GPM_extra_Z_NotCor, aes(x=c(1:length(GPM_extra_Z_NotCor[,1])),y=GPM_extra_Z_NotCor[,"RNA.001103"], label=GPM_extra_Z_NotCor[,"Causal.gene"]))
+p + geom_point(size=1) + geom_text_repel(size=2,colour="red")+ ylim(-20, 20)
+
+p <- ggplot(GPM_extra_Z_NotCor, aes(x=GPM_extra_Z_NotCor[,"RNA.001103"], label=GPM_extra_Z_NotCor[,"Causal.gene"]))
+p + geom_histogram(colour = "darkgreen", fill = "white",binwidth = 0.5) + xlim(-20,20)
+
+geneVal=GPM_extra_Z_NotCor["ENSG00000127554","RNA.001103"]
+geneVal
+length(GPM_extra_Z_NotCor[GPM_extra_Z_NotCor[,"RNA.001103"]>geneVal,"RNA.001103"])
+length(GPM_extra_Z_NotCor[GPM_extra_Z_NotCor[,"RNA.001103"]<geneVal,"RNA.001103"])
+length(GPM_extra_Z_NotCor[GPM_extra_Z_NotCor[,"RNA.001103"]>20,"RNA.001103"])
+
+cat("Not corrected ",sample)
+for(i in 1:length(rownames(sampleToGene)))
+{
+  sample=rownames(sampleToGene)[i]
+  geneVal=GPM_extra_Z_NotCor[as.character(sampleToGene[i,"Ensg.gene"]),sample]
+  geneVal
+  cat("\nSample ",sample)
+  cat("\tGene ",as.character(sampleToGene[i,"Causal.gene"]))
+  cat("\tlarger ",length(GPM_extra_Z_NotCor[GPM_extra_Z_NotCor[,sample]>geneVal,sample]))
+  cat("\tsmaller ",length(GPM_extra_Z_NotCor[GPM_extra_Z_NotCor[,sample]<geneVal,sample]))
+  cat("\t>20 ",length(GPM_extra_Z_NotCor[GPM_extra_Z_NotCor[,sample]>20,sample]))
+}
+```
+
+## Z-scores corrected
+```{r zscoresCorrected}
+setwd("E:/Groningen/Data/Juha/Genes31995/Healthy/PCA/counts_GENES_ScaffoldGenesRemoved_DiscardedRemoved_RNAids/");
+GPMnames <- fread("PC_1-1-230__zScores.txt")
+GPM <- data.frame(GPMnames, row.names=1);
+meta <- read.table("E:/Groningen/Data/RNAseq_clinic/RNAseq_Info.txt", sep="\t", header=TRUE)
+rownames(meta)=make.names(meta[,"externalSampleID"], unique=TRUE)
+
+sampleToGene=read.table("E:/Groningen/Data/RNAseq_clinic/SampleToGene.txt", sep="\t",row.names=1, header=TRUE)
+#NOTCH1: RNA_001011,RNA_001011.1,RNA_000979
+#GLB1: RNA.001128
+#L1CAM: RNA_000811,RNA_000947
+#EIF2B5: GPM_extra_Z["ENSG00000145191","RNA.001110"]
+#BRCA2:  GPM_extra_Z["ENSG00000139618","RNA_000751"]
+#BRCA1: GPM_extra_Z["ENSG00000012048","RNA_000939"]
+#MYBPC3: "RNA_00958", "RNA_00958.1"
+#RAPSN: "RNA.001126", "RNA.001126.1" 
+#GFER: RNA.001103
+#MYH7: c("RNA_001073","RNA_001073.1","RNA_001075","RNA_001075.1")
+
+index=match(rownames(GPM),rownames(conversion))
+GPM_extra_Z=cbind.data.frame(GPM, Causal.gene=conversion[index,1])
+p <- ggplot(GPM_extra_Z, aes(x=c(1:length(GPM_extra_Z[,1])),y=GPM_extra_Z[,"RNA.001103"], label=GPM_extra_Z[,"Causal.gene"]))
+p + geom_point(size=1) + geom_text_repel(size=2,colour="red")+ ylim(-20, 20)
+
+p <- ggplot(GPM_extra_Z, aes(x=GPM_extra_Z[,"RNA.001103"], label=GPM_extra_Z[,"Causal.gene"]))
+p + geom_histogram(colour = "darkgreen", fill = "white",binwidth = 0.5) + xlim(-20,20)
+
+GPM_extra_Z["ENSG00000148400","RNA_001011"]
+geneVal=GPM_extra_Z["ENSG00000148400","RNA_000979"]
+length(GPM_extra_Z[GPM_extra_Z[,"RNA_000979"]>geneVal,"RNA_000979"])
+length(GPM_extra_Z[GPM_extra_Z[,"RNA_000979"]>20,"RNA_000979"])
+
+cat("Corrected ",sample)
+for(i in 1:length(rownames(sampleToGene)))
+{
+  sample=rownames(sampleToGene)[i]
+  geneVal=GPM_extra_Z[as.character(sampleToGene[i,"Ensg.gene"]),sample]
+  geneVal
+  cat("\nSample ",sample)
+  cat("\tGene ",as.character(sampleToGene[i,"Causal.gene"]))
+  cat("\tlarger ",length(GPM_extra_Z[GPM_extra_Z[,sample]>geneVal,sample]))
+  cat("\tsmaller ",length(GPM_extra_Z[GPM_extra_Z[,sample]<geneVal,sample]))
+  cat("\t>20 ",length(GPM_extra_Z[GPM_extra_Z[,sample]>20,sample]))
+}
+write.table(GPM_extra_Z[,"RNA_001011"], "E:/Groningen/Data/Juha/Genes31995/Healthy/PCA/counts_GENES_ScaffoldGenesRemoved_DiscardedRemoved_RNAids/Computer/R_results/test2.txt", sep="\t")
+
+GPM_extra_Z_conv=getGenes(GPM_extra_Z,GPMnames,TRUE)
+rownames(GPM_extra_Z_conv)=
+
+GPM_extra_Z[as.character(sampleToGene[,"Ensg.gene"]),rownames(sampleToGene)]
+```
+
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
