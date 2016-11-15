@@ -172,17 +172,19 @@ quadPlotDown <- function(Down_N_extra,Down_C_extra,Down_C_Stdev_extra,Down_C_Z_e
 {
   for(s in c(start:end))
   {
-    print(colnames(Down_N_extra)[s],size="\\fontsize{20pt}{10pt}\\selectfont")
-    p1 <- ggplot(Down_N_extra, aes(x=c(1:length(Down_N_extra[,1])),y=Down_N_extra[,s]))
+    sample=colnames(Down_N_extra)[s]
+    print(sample,size="\\fontsize{20pt}{10pt}\\selectfont")
+    
+    p1 <- ggplot(Down_N_extra, aes(x=c(1:length(Down_N_extra[,1])),y=Down_N_extra[,sample]))
         plot1=p1 + geom_point(size=0.2, alpha=0.4, colour=Down_N_extra[,"Color"]) + ggtitle(paste("Uncorrected"))+ylim(-3,3)+ xlab("Genes") + ylab("signal")
         
-    p2 <- ggplot(Down_C_extra, aes(x=c(1:length(Down_C_extra[,1])),y=Down_C_extra[,s]))
+    p2 <- ggplot(Down_C_extra, aes(x=c(1:length(Down_C_extra[,1])),y=Down_C_extra[,sample]))
         plot2=p2 + geom_point(size=0.2, alpha=0.4,colour=Down_C_extra[,"Color"]) + ggtitle(paste("Corrected"))+ylim(-3,3)+ xlab("Genes") + ylab("signal")
         
-    p3 <- ggplot(Down_C_Stdev_extra, aes(x=c(1:length(Down_C_Stdev_extra[,1])),y=Down_C_Stdev_extra[,s]))
+    p3 <- ggplot(Down_C_Stdev_extra, aes(x=c(1:length(Down_C_Stdev_extra[,1])),y=Down_C_Stdev_extra[,sample]))
         plot3=p3 + geom_point(size=0.2, alpha=0.4,colour=Down_C_Stdev_extra[,"Color"]) + ggtitle(paste("Corrected/(stdev_genes_uncorrected_healthy)"))+ xlab("Genes") + ylab("signal")
         
-    p4 <- ggplot(Down_C_Z_extra, aes(x=c(1:length(Down_C_Z_extra[,1])),y=Down_C_Z_extra[,s]))
+    p4 <- ggplot(Down_C_Z_extra, aes(x=c(1:length(Down_C_Z_extra[,1])),y=Down_C_Z_extra[,sample]))
         plot4=p4 + geom_point(size=0.2, alpha=0.4,colour=Down_C_Z_extra[,"Color"]) + ggtitle(paste("Z-score genes corrected (based on avg&stdev genes corrected BBMRI)"))+ylim(-10,10)+ xlab("Genes") + ylab("signal")
         
         grid.arrange(plot1,plot2,plot3,plot4,nrow=4)
@@ -214,6 +216,7 @@ Down_C_Stdev_extra=loadDown(paste(wd,"PC_1-1-230_DevidedBySTdevs_12000highest.tx
 Down_C_Z_extra=loadDown(paste(wd,"PC_1-1-230_zScores_12000highest.txt",sep=""),chromInfo)
 
 quadPlotDown(Down_N_extra,Down_C_extra,Down_C_Stdev_extra,Down_C_Z_extra,3,19);
+
 ```
 
 ## PCA on samples
@@ -355,5 +358,18 @@ print("Not corrected z-score")
 printOutlierInfo(sampleToGene,GPM_extra_Z_NotCor)
 print("Corrected z-score")
 printOutlierInfo(sampleToGene,GPM_extra_C_Z)
+```
+
+```{r panelExpression}
+
+#remove bad samples (those that have 0 expression in any samples)
+BBMRI_N_NoNAN=BBMRI_N[,-which(colnames(BBMRI_N) %in% c("AC52C5ACXX.5.8","AD1NE2ACXX.5.22","AC52C5ACXX.5.1","AC52C5ACXX.5.3","AC52C5ACXX.5.2","BC52YAACXX.8.4","AC52C5ACXX.5.6","AC52C5ACXX.5.7","AC1JL5ACXX.6.8","BC52YAACXX.4.23","AC1JV9ACXX.1.10","AC1JL5ACXX.5.25","AC1JL5ACXX.6.1","AC52C5ACXX.5.9","AC52C5ACXX.5.5","AC1JL5ACXX.7.18","AC1JL5ACXX.5.10","BC52YAACXX.5.3","AC1JL5ACXX.7.19","AC52C5ACXX.5.4","AC1JL5ACXX.5.27","AC1JL5ACXX.7.27"))]
+
+BBMRI_N_Avg=apply(BBMRI_N_NoNAN,1,mean)
+BBMRI_N_Stdev=apply(BBMRI_N_NoNAN,1,sd)
+
+write.table(BBMRI_N_Avg,"E:/Groningen/Data/bbmri/GCRh38/DESeqNorm/BBMRI_Gene_Averages.txt", sep="\t")
+write.table(BBMRI_N_Stdev,"E:/Groningen/Data/bbmri/GCRh38/DESeqNorm/BBMRI_Gene_Stdev.txt", sep="\t")
+
 ```
 
