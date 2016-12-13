@@ -96,13 +96,13 @@ plotPairExpression <- function(gene, subsetGPMtrans_N, subsetGPMtrans_C)
   CellType=subsetGPMtrans_N[,"Cell.type"]
   labels1=replace(subsetGPMtrans_N[,"causal.gene"],subsetGPMtrans_N[,"causal.gene"]!=gene,"")
   p1 <- ggplot(subsetGPMtrans_N, aes(x=c(1:length(subsetGPMtrans_N[,1])),y=subsetGPMtrans_N[,gene], label=labels1,color=CellType))
-  plot1=p1 + geom_point(size=1) + geom_text_repel()+ggtitle(paste("Uncorrected",gene)) + xlab("PC1") + ylab("PC2")
+  plot1=p1 + geom_point(size=1) + geom_text_repel()+ggtitle(paste("Uncorrected",gene)) + xlab("Sample") + ylab("Expression")
   
   #get the genes from the matrixes
   Cell_Type=subsetGPMtrans_C[,"Cell.type"]
   labels2=replace(subsetGPMtrans_C[,"causal.gene"],subsetGPMtrans_C[,"causal.gene"]!=gene,"")
   p2 <- ggplot(subsetGPMtrans_C, aes(x=c(1:length(subsetGPMtrans_C[,1])),y=subsetGPMtrans_C[,gene], label=labels2,color=Cell_Type))
-  plot2=p2 + geom_point() + geom_text_repel()+ggtitle(paste("Corrected",gene)) + xlab("PC1") + ylab("PC2")
+  plot2=p2 + geom_point() + geom_text_repel()+ggtitle(paste("Corrected",gene)) + xlab("Sample") + ylab("Corrected Expression")
   print(plot1)
   print(plot2)
   #grid.arrange(plot1,plot2, ncol=2)
@@ -189,6 +189,23 @@ quadPlotDown <- function(Down_N_extra,Down_C_extra,Down_C_Stdev_extra,Down_C_Z_e
         
         grid.arrange(plot1,plot2,plot3,plot4,nrow=4)
   }
+}
+
+panelExpression <- function(panel)
+{
+  
+  print(panel)
+  panelColumn=paste(toupper(panel),"_Ens",sep="")
+  highExpression=length((which(BBMRI_N_Avg[genePanels[[panelColumn]]]>7)))
+  nPanelGenes=length(which(BBMRI_N_Avg[genePanels[[panelColumn]]]!="NA"))
+  print(paste(highExpression, "/" , nPanelGenes,"=", highExpression/nPanelGenes,sep=""))
+  
+  panelExpression = data.frame(BBMRI_N_Avg[genePanels[[panelColumn]]][which(BBMRI_N_Avg[genePanels[[panelColumn]]]!="NA")])
+  panelExpression[,2]=panelExpression[,1]
+  panelExpression[,1]=ensemblToGene_Symbol[rownames(panelExpression),1]
+  writeFN=paste("E:/Groningen/Data/Annotation/Panels/",panel,".txt",sep="")
+  write.table(panelExpression,writeFN, sep="\t")
+  print(paste("file written to:", writeFN))
 }
 
 ```
@@ -362,6 +379,7 @@ printOutlierInfo(sampleToGene,GPM_extra_C_Z)
 
 ```{r panelExpression}
 
+
 #remove bad samples (those that have 0 expression in any samples)
 BBMRI_N_NoNAN=BBMRI_N[,-which(colnames(BBMRI_N) %in% c("AC52C5ACXX.5.8","AD1NE2ACXX.5.22","AC52C5ACXX.5.1","AC52C5ACXX.5.3","AC52C5ACXX.5.2","BC52YAACXX.8.4","AC52C5ACXX.5.6","AC52C5ACXX.5.7","AC1JL5ACXX.6.8","BC52YAACXX.4.23","AC1JV9ACXX.1.10","AC1JL5ACXX.5.25","AC1JL5ACXX.6.1","AC52C5ACXX.5.9","AC52C5ACXX.5.5","AC1JL5ACXX.7.18","AC1JL5ACXX.5.10","BC52YAACXX.5.3","AC1JL5ACXX.7.19","AC52C5ACXX.5.4","AC1JL5ACXX.5.27","AC1JL5ACXX.7.27"))]
 
@@ -371,5 +389,21 @@ BBMRI_N_Stdev=apply(BBMRI_N_NoNAN,1,sd)
 write.table(BBMRI_N_Avg,"E:/Groningen/Data/bbmri/GCRh38/DESeqNorm/BBMRI_Gene_Averages.txt", sep="\t")
 write.table(BBMRI_N_Stdev,"E:/Groningen/Data/bbmri/GCRh38/DESeqNorm/BBMRI_Gene_Stdev.txt", sep="\t")
 
+genePanels=fread("E:/Groningen/Data/Annotation/Panels/LijstGenenVanPanels-1nov2016_ENSG.txt")
+ensemblToGene_Symbol=data.frame(fread("E:/Groningen/Data/Annotation/GRCh38/EnsgToGeneSymbol_DuplicatesDeleted.txt"),row.names=TRUE);
+
+print("cardio")
+paste(length((which(BBMRI_N_Avg[genePanels[["CARDIO_Ens"]]]>7))), "/" , length(which(BBMRI_N_Avg[genePanels[["CARDIO_Ens"]]]!="NA")))
+
+panelExpression("CARDIO")
+panelExpression("ONCO")
+panelExpression("DYSTONIE")
+panelExpression("EPILEPSIE")
+panelExpression("DERMATOLOGIE")
+
+
+print("DERMATOLOGIE_Ens")
+paste(length((which(BBMRI_N_Avg[genePanels[["DERMATOLOGIE_Ens"]]]>7))), "/" , length(which(BBMRI_N_Avg[genePanels[["DERMATOLOGIE_Ens"]]]!="NA")))
+BBMRI_N_Avg[genePanels[["CARDIO_Ens"]]][which(BBMRI_N_Avg[genePanels[["CARDIO_Ens"]]]!="NA")]
 ```
 
