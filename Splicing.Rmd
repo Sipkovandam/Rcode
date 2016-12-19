@@ -1,0 +1,231 @@
+---
+title: "Splicing"
+author: "Sipko"
+date: "December 19, 2016"
+output: html_document
+---
+```{r setup, include=FALSE}
+#knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path='Figs/',echo=FALSE, warning=FALSE, message=FALSE)
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE)
+```
+
+```{r set-options, echo=FALSE, cache=FALSE}
+options(width = 1600)
+```
+
+```{r libraries, include=FALSE, echo=FALSE, warning=FALSE, message=FALSE}
+#install.packages('devtools') #uncomment if libraries are missing
+if(!require(devtools)) {
+install.packages("devtools"); require(devtools)} #load / install+load devtools
+library(devtools) 
+if(!require(scales)) {
+install.packages("scales"); require(scales)} #load / install+load devtools
+library(scales)
+if(!require(plyr)) {
+install.packages("plyr"); require(plyr)} #load / install+load devtools
+library(plyr)
+if(!require(stringr)) {
+install.packages("stringr"); require(stringr)} #load / install+load devtools
+library(stringr)
+if(!require(data.table)) {
+install.packages("data.table"); require(data.table)} #load / install+load devtools
+library(data.table)
+if(!require(ggplot2)) {
+install.packages("ggplot2"); require(ggplot2)} #load / install+load devtools
+library(ggplot2)
+#devtools::install_github("RcppCore/Rcpp",dep=TRUE) #uncomment if libraries are missing
+#devtools::install_github("slowkow/ggrepel",dep=TRUE) #uncomment if libraries are missing
+library(ggrepel)
+if(!require(gridExtra)) {
+install.packages("gridExtra"); require(gridExtra)} #load / install+load devtools
+library(gridExtra)
+require(reshape2)
+
+#functions
+plotSpliceVariants <- function(pathExpression,pathRatios, filename, geneToCausalPosition,removeSamples,minReads)
+{
+  gene=gsub(".txt","",filename)
+  print(gene)
+  variantsSamples=geneToCausalPosition[which(geneToCausalPosition[,1]==gene),c(2,3)]
+
+  for(i in c(1:length(rownames(variantsSamples))))
+  {
+    variantSample=variantsSamples[i,]
+    position=variantSample["Position"]
+    sampleNames=strsplit(as.character(variantSample["Samples"]),",")
+    expressionFN=paste(pathExpression,filename, sep="");
+    print(expressionFN)
+    ratioFN=paste(pathRatios,filename, sep="");
+    
+    expression=data.frame(fread(expressionFN),row.names=1)
+    ratios=data.frame(fread(ratioFN),row.names=1)
+    ratios["sampleNames"]=rownames(ratios)
+    
+    ratios["Colour"]="Black"
+    ratios["Size"]=0.5
+   
+    print(paste("position=",position))
+    colors=c("Red","Yellow","Purple","Green")
+    for(i in c(1:length(sampleNames[[1]])))
+    {
+      sampleName=sampleNames[[1]][i]
+      print(paste("SampleName=",sampleName))
+      ratios[sampleName,"Colour"]=colors[i]
+      ratios[sampleName,"Size"]=1.5
+      i=i+1
+    }
+  
+    #remove fibroblast and BRCA2 samples
+    ratios_removedSample=ratios[!grepl("DISCARDED",rownames(ratios)),]
+    #remove fibroblast and BRCA2 samples
+    expression_removedSample=expression[!grepl("DISCARDED",rownames(expression)),]
+    for(i in c(1:length(removeSamples)))
+    {
+      removeSample=removeSamples[i]
+      ratios_removedSample=ratios_removedSample[-c(which(rownames(expression_removedSample)==removeSample)),]
+      expression_removedSample=expression_removedSample[-c(which(rownames(expression_removedSample)==removeSample)),]
+    }
+    
+    retVals<-getClosest(position,colnames(expression_removedSample))
+    closestSplices=retVals$closestVars
+    print(paste("spliceClos=",closestSplices))
+    title=paste(gene,retVals$title)
+    data_ratio = melt(ratios_removedSample,id=c("Colour","Size","sampleNames"))
+    data_expression = melt(expression_removedSample)
+    includeRows=data_expression[,2]>=minReads
+    print(paste("includeRows", length(includeRows)))
+    if(length(includeRows) ==0)
+    {
+      print(paste("No rows expression larger than:", minReads))
+      return (0);
+    }
+    
+    plotData_ratio=data_ratio[includeRows,]
+    plotData_ratio[,"boxColours"]="Red";
+    
+    for(splice in closestSplices)
+    {
+      plotData_ratio[which(plotData_ratio[,"variable"]==splice),"boxColours"]="Green"
+      plotData_ratio[which(plotData_ratio[,"variable"]==splice),"Colour"]="Green"
+      
+      colors=c("Red","Yellow","Purple","Green")
+      for(i in c(1:length(sampleNames[[1]])))
+      {
+       sampleName=sampleNames[[1]][i]
+        print(paste("SampleName=",sampleName))
+        plotData_ratio[which(plotData_ratio[,"variable"]==splice & plotData_ratio[,"sampleNames"]==sampleName),"Colour"]=colors[(i-1)%%4+1];
+       i=i+1
+      }
+      
+    }
+    
+    print(ggplot(plotData_ratio, aes(x=variable, y=value)) +ggtitle(title)+ theme(legend.position="none")+ geom_boxplot(outlier.colour = NA,aes(fill=plotData_ratio[,"boxColours"]))+ geom_point(position = position_jitter(width = 0.2), colour=plotData_ratio[,"Colour"], size=plotData_ratio[,"Size"]) + xlab("Splice variant") + ylab("fraction of reads (of gene) overlapping splice site"))
+  
+    for(splice in closestSplices)
+    {
+      print(paste("splice=",splice))
+      title=paste(gene,retVals$title)
+      print(paste("expression_removedSample[,splice]=",expression_removedSample[1,splice]))
+      includeRows=expression_removedSample[,splice]>=minReads
+      if(length(ratios_removedSample[includeRows,splice]) ==0)
+      {
+        print(paste("No rows expression larger than2=", minReads))
+        next;
+      }
+      print(ggplot(ratios_removedSample[includeRows,], aes(x=1, y=ratios_removedSample[includeRows,splice]))+ geom_boxplot(outlier.colour = NA) +geom_point(position = position_jitter(width = 0.2), colour=ratios_removedSample[includeRows,"Colour"])+ xlab(title) + ylab("fraction of reads (of gene) overlapping splice site"))
+    
+    }
+  }#########################  
+}
+
+getClosest <- function(position, columnNames)
+{
+  smallest=999999999
+  closestVar="";
+  for(i in 2:length(columnNames))
+  {
+    spliceVar=columnNames[i]
+    #X9_136518825_136519442_2_4_1
+    split=strsplit(spliceVar,"_")
+    start=as.numeric(split[[1]][2])
+    end=as.numeric(split[[1]][3])
+    
+    #print(start)
+    #print(end)
+    
+    startDiff=abs(start-position)
+    endDiff=abs(end-position)
+    minDif=startDiff
+    if(minDif>endDiff)
+      minDif=endDiff
+    #cat(paste(spliceVar,minDif,"\n",sep='\t'))
+    
+    if(minDif==smallest)
+    {
+      closestVar=c(closestVar,spliceVar)
+    }
+    if(minDif<smallest)
+    {
+      smallest=minDif
+      closestVar=spliceVar
+      smallestStartDif=startDiff
+      smallestStartDifEndDiff=endDiff
+    }
+    
+  }
+  title=paste("Closest=", closestVar,"\tDistToStart=",smallestStartDif,"\tDistToEnd=",smallestStartDifEndDiff)[1]
+  cat(paste("Closest=", closestVar,"\tDistanceToStart=",smallestStartDif,"\tDistanceToEnd=",smallestStartDifEndDiff,"\n",sep='')[1])
+  print(paste("funcClos", closestVar))
+  return (list("closestVars"=closestVar,"title"=title))
+}
+```
+
+##Splice variant analysis supported by 8 or more reads
+In this analysis 4 genes representing 5 patients (2*2 patients had a mutation in the same gene (L1CAM and NOTCH1)) and 8 samples (2 samples were sequenced in duplicate (MYBPC3, one of the NOTCH1 samples)) were used in the splice variant analysis.
+
+Notes:
+This analysis included all 5gpm and splice variant samples, except for:
+  - BRCA2 patient. This gene does show expression in blood but not in BRCA2 sample itself.
+  - Firbroblast samples. Are outliers in the expression PCA plot.
+  
+Here we first plot all results including only the data points supported by 8 or more reads.
+First all splice variants are plotted for the diagnosed gene for a particular patient. 
+  - Dots are collored green for the splice variant closest to the causal variant
+  - Dots are collored red (and yellow) and have 4 times larger size for the sample containing the causal mutation.
+
+*Note that one of the NOTCH1 samples is conducted in duplicate. The graph appears to show only the red dot in the causal variant, but this is because the value in the duplicate is identical causing the yellow dot to be overlayed by the red dot.
+
+Then the splice variants that are closest to the identified splice junction are plotted again in separate plots to obtain a higher resolution.
+
+```{r splice-variants_8Reads}
+pathExpression = "E:/Groningen/Splicing/Results/PerGene/Expression/"
+pathRatios = "E:/Groningen/Splicing/Results/PerGene/Ratios/"
+geneToCausalPosition=data.frame(fread('E:/Groningen/Splicing/Results/GeneToCausalPosition.txt'))
+
+file.names <- dir(path, pattern =".txt")
+for(i in 1:length(file.names)){
+  minReads=8 #minimum number of reads that need to overlap a junction to be included in the plots
+  #causalVariant="X9_136518825_136519442_2_4_1" # need to add a capital "X" at the start, no idea why R does that
+  removeSample=c("160613_SN163_0713_AC8NKTACXX_L5_CAACTA","160613_SN163_0713_AC8NKTACXX_L1_ACAGTG","160613_SN163_0713_AC8NKTACXX_L4_GGTAGC","160120_SN163_0694_AC8N1LACXX_L2_GATCAG")
+  plotSpliceVariants(pathExpression,pathRatios, file.names[i], geneToCausalPosition,removeSample,minReads)
+}
+
+```
+
+##Splice variant analysis supported by any number of reads
+Similar as above but, now we plot the results including all data points supported by any number of reads.
+
+```{r splice-variants_8Reads}
+pathExpression = "E:/Groningen/Splicing/Results/PerGene/Expression/"
+pathRatios = "E:/Groningen/Splicing/Results/PerGene/Ratios/"
+geneToCausalPosition=data.frame(fread('E:/Groningen/Splicing/Results/GeneToCausalPosition.txt'))
+
+file.names <- dir(path, pattern =".txt")
+for(i in 1:length(file.names)){
+  minReads=0 #minimum number of reads that need to overlap a junction to be included in the plots
+  #causalVariant="X9_136518825_136519442_2_4_1" # need to add a capital "X" at the start, no idea why R does that
+  removeSamples=c("160613_SN163_0713_AC8NKTACXX_L5_CAACTA","160613_SN163_0713_AC8NKTACXX_L1_ACAGTG","160613_SN163_0713_AC8NKTACXX_L4_GGTAGC","160120_SN163_0694_AC8N1LACXX_L2_GATCAG")
+  plotSpliceVariants(pathExpression,pathRatios, file.names[i], geneToCausalPosition,removeSamples,minReads)
+}
+
+```
